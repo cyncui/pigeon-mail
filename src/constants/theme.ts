@@ -63,3 +63,15 @@ export const Spacing = {
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;
+
+/**
+ * Pigeon Mail brand palette — fixed design colors (not light/dark adaptive).
+ * Read from the Figma capture; confirm exact hexes in Figma → Dev Mode → Inspect.
+ */
+export const Brand = {
+  cream: '#FFF5E1', // Brand/Cream — screen background
+  brown: '#3F2E22', // Brand/Brown — title, captions, frames, create button
+  brown60: 'rgba(63, 46, 34, 0.6)', // Brand/Brown 60%
+  brown10: 'rgba(63, 46, 34, 0.1)', // Brand/Brown 10%
+  stamp: '#FFFFFF', // white postage-stamp border
+} as const;

@@ -1,98 +1,132 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { CreateButton } from '@/components/create-button';
+import { Postcard } from '@/components/postcard';
+import { Brand, Fonts, Spacing } from '@/constants/theme';
+import { POSTCARDS } from '@/lib/postcards';
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+const FAB_SIZE = 56;
+const FAB_MARGIN = Spacing.four;
 
 export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
+  const { height: screenHeight } = useWindowDimensions();
+
+  // Content-relative bounds of each card, keyed by id, plus the live scroll
+  // offset — together they tell us whether a postcard is behind the button.
+  const boundsRef = useRef<Record<string, { top: number; height: number }>>({});
+  const scrollYRef = useRef(0);
+  const overRef = useRef(false);
+  const [overPostcard, setOverPostcard] = useState(false);
+
+  // The button's vertical center in screen coordinates. The ScrollView fills
+  // the screen, so a content point maps to screen-y as (contentY - scrollY).
+  const fabCenterY = screenHeight - insets.bottom - FAB_MARGIN - FAB_SIZE / 2;
+
+  const recompute = useCallback(
+    (scrollY: number) => {
+      const next = Object.values(boundsRef.current).some(({ top, height }) => {
+        const screenTop = top - scrollY;
+        return fabCenterY >= screenTop && fabCenterY <= screenTop + height;
+      });
+      if (next !== overRef.current) {
+        overRef.current = next;
+        setOverPostcard(next);
+      }
+    },
+    [fabCenterY],
+  );
+
+  const onScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const y = event.nativeEvent.contentOffset.y;
+      scrollYRef.current = y;
+      recompute(y);
+    },
+    [recompute],
+  );
+
+  const onCardLayout = useCallback(
+    (id: string, event: LayoutChangeEvent) => {
+      const { y, height } = event.nativeEvent.layout;
+      boundsRef.current[id] = { top: y, height };
+      recompute(scrollYRef.current);
+    },
+    [recompute],
+  );
+
+  // Re-evaluate when measurements or screen dimensions settle, so the initial
+  // color is correct before the first scroll.
+  useEffect(() => {
+    recompute(scrollYRef.current);
+  }, [recompute]);
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
+    <View style={styles.root}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: insets.top + Spacing.three,
+            paddingBottom: insets.bottom + FAB_SIZE + Spacing.six,
+          },
+        ]}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.title}>Pigeon Mail</Text>
+        {POSTCARDS.map((postcard) => (
+          <Postcard
+            key={postcard.id}
+            postcard={postcard}
+            onLayout={(event) => onCardLayout(postcard.id, event)}
           />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
+        ))}
+      </ScrollView>
 
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+      <CreateButton
+        overPostcard={overPostcard}
+        size={FAB_SIZE}
+        onPress={() => {
+          // TODO: open the create-postcard flow (Capture → Compose → …)
+        }}
+        style={{ right: FAB_MARGIN, bottom: insets.bottom + FAB_MARGIN }}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
+    backgroundColor: Brand.cream,
   },
-  safeArea: {
+  scroll: {
     flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
+  content: {
     paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
   },
   title: {
+    fontFamily: Fonts.serif,
+    fontStyle: 'italic',
+    fontSize: 30,
+    lineHeight: 38,
+    color: Brand.brown,
     textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+    marginBottom: Spacing.five,
   },
 });
