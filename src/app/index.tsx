@@ -21,7 +21,8 @@ const FAB_MARGIN = Spacing.four;
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { height: screenHeight } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const cardWidth = screenWidth - Spacing.four * 2;
 
   // Content-relative bounds of each card, keyed by id, plus the live scroll
   // offset — together they tell us whether a postcard is behind the button.
@@ -92,6 +93,7 @@ export default function HomeScreen() {
           <Postcard
             key={postcard.id}
             postcard={postcard}
+            width={cardWidth}
             onLayout={(event) => onCardLayout(postcard.id, event)}
           />
         ))}

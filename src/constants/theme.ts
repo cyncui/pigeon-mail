@@ -73,5 +73,7 @@ export const Brand = {
   brown: '#3F2E22', // Brand/Brown — title, captions, frames, create button
   brown60: 'rgba(63, 46, 34, 0.6)', // Brand/Brown 60%
   brown10: 'rgba(63, 46, 34, 0.1)', // Brand/Brown 10%
-  stamp: '#FFFFFF', // white postage-stamp border
+  stamp: '#FFFFFF', // white postage-stamp border (legacy)
+  paper: '#F3EAD6', // warm ivory card stock — the postcard "paper"
+  print: 'rgba(120, 94, 56, 0.1)', // warm matte veil over photos to read as a print
 } as const;
