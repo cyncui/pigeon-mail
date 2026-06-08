@@ -1,14 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-  type LayoutChangeEvent,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-} from 'react-native';
+import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CreateButton } from '@/components/create-button';
@@ -21,56 +11,8 @@ const FAB_MARGIN = Spacing.four;
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { height: screenHeight } = useWindowDimensions();
-
-  // Content-relative bounds of each card, keyed by id, plus the live scroll
-  // offset — together they tell us whether a postcard is behind the button.
-  const boundsRef = useRef<Record<string, { top: number; height: number }>>({});
-  const scrollYRef = useRef(0);
-  const overRef = useRef(false);
-  const [overPostcard, setOverPostcard] = useState(false);
-
-  // The button's vertical center in screen coordinates. The ScrollView fills
-  // the screen, so a content point maps to screen-y as (contentY - scrollY).
-  const fabCenterY = screenHeight - insets.bottom - FAB_MARGIN - FAB_SIZE / 2;
-
-  const recompute = useCallback(
-    (scrollY: number) => {
-      const next = Object.values(boundsRef.current).some(({ top, height }) => {
-        const screenTop = top - scrollY;
-        return fabCenterY >= screenTop && fabCenterY <= screenTop + height;
-      });
-      if (next !== overRef.current) {
-        overRef.current = next;
-        setOverPostcard(next);
-      }
-    },
-    [fabCenterY],
-  );
-
-  const onScroll = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const y = event.nativeEvent.contentOffset.y;
-      scrollYRef.current = y;
-      recompute(y);
-    },
-    [recompute],
-  );
-
-  const onCardLayout = useCallback(
-    (id: string, event: LayoutChangeEvent) => {
-      const { y, height } = event.nativeEvent.layout;
-      boundsRef.current[id] = { top: y, height };
-      recompute(scrollYRef.current);
-    },
-    [recompute],
-  );
-
-  // Re-evaluate when measurements or screen dimensions settle, so the initial
-  // color is correct before the first scroll.
-  useEffect(() => {
-    recompute(scrollYRef.current);
-  }, [recompute]);
+  const { width: screenWidth } = useWindowDimensions();
+  const cardWidth = screenWidth - Spacing.four * 2;
 
   return (
     <View style={styles.root}>
@@ -83,22 +25,15 @@ export default function HomeScreen() {
             paddingBottom: insets.bottom + FAB_SIZE + Spacing.six,
           },
         ]}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.title}>Pigeon Mail</Text>
         {POSTCARDS.map((postcard) => (
-          <Postcard
-            key={postcard.id}
-            postcard={postcard}
-            onLayout={(event) => onCardLayout(postcard.id, event)}
-          />
+          <Postcard key={postcard.id} postcard={postcard} width={cardWidth} />
         ))}
       </ScrollView>
 
       <CreateButton
-        overPostcard={overPostcard}
         size={FAB_SIZE}
         onPress={() => {
           // TODO: open the create-postcard flow (Capture → Compose → …)
