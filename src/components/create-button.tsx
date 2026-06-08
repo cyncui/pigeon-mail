@@ -1,17 +1,15 @@
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
+import { GlassSurface } from '@/components/glass-surface';
 import { Brand } from '@/constants/theme';
 
 type Props = {
-  /** When a postcard sits behind the button, flip the color for contrast. */
-  overPostcard: boolean;
   onPress?: () => void;
   size?: number;
   style?: StyleProp<ViewStyle>;
 };
 
-export function CreateButton({ overPostcard, onPress, size = 56, style }: Props) {
-  const color = overPostcard ? Brand.cream : Brand.brown;
+export function CreateButton({ onPress, size = 56, style }: Props) {
   const bar = size * 0.32;
 
   return (
@@ -22,19 +20,14 @@ export function CreateButton({ overPostcard, onPress, size = 56, style }: Props)
       onPress={onPress}
       style={({ pressed }) => [
         styles.fab,
-        {
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          borderColor: color,
-          opacity: pressed ? 0.55 : 1,
-        },
+        { width: size, height: size, borderRadius: size / 2, transform: [{ scale: pressed ? 0.94 : 1 }] },
         style,
       ]}
     >
+      <GlassSurface style={[StyleSheet.absoluteFill, { borderRadius: size / 2 }]} interactive intensity={90} />
       <View style={{ width: bar, height: bar }}>
-        <View style={[styles.line, { backgroundColor: color, top: bar / 2 - 1, left: 0, right: 0, height: 2 }]} />
-        <View style={[styles.line, { backgroundColor: color, left: bar / 2 - 1, top: 0, bottom: 0, width: 2 }]} />
+        <View style={[styles.line, { top: bar / 2 - 1, left: 0, right: 0, height: 2 }]} />
+        <View style={[styles.line, { left: bar / 2 - 1, top: 0, bottom: 0, width: 2 }]} />
       </View>
     </Pressable>
   );
@@ -45,11 +38,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    backgroundColor: 'transparent',
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Brand.brown10,
   },
   line: {
     position: 'absolute',
     borderRadius: 1,
+    backgroundColor: Brand.brown,
   },
 });
