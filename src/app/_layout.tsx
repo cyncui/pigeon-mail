@@ -4,9 +4,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { Brand } from '@/constants/theme';
+import { useAppFonts } from '@/hooks/use-app-fonts';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+
+  useAppFonts();
 
   return (
     <SafeAreaProvider>
@@ -17,7 +20,17 @@ export default function RootLayout() {
             headerShown: false,
             contentStyle: { backgroundColor: Brand.cream },
           }}
-        />
+        >
+          <Stack.Screen name="index" />
+          <Stack.Screen
+            name="create"
+            options={{
+              presentation: 'transparentModal',
+              animation: 'none',
+              contentStyle: { backgroundColor: 'transparent' },
+            }}
+          />
+        </Stack>
       </ThemeProvider>
     </SafeAreaProvider>
   );

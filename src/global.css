@@ -1,3 +1,29 @@
+@font-face {
+  font-family: 'Ioskeley Mono';
+  src: url('/fonts/IoskeleyMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Art Company Mono — the display "serif". Italic is its own family so it can be
+   referenced directly (matches the native setup, where fontStyle is unreliable
+   for custom fonts). Trial face is missing some punctuation, hence the fallback. */
+@font-face {
+  font-family: 'Art Company Mono';
+  src: url('/fonts/ArtCompanyMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Art Company Mono Italic';
+  src: url('/fonts/ArtCompanyMono-Italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --font-display:
     Spline Sans, Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji,
@@ -5,5 +31,16 @@
   --font-mono:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
   --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
-  --font-serif: Georgia, 'Times New Roman', serif;
+  --font-serif: 'Art Company Mono', Georgia, 'Times New Roman', serif;
+  --font-serif-italic: 'Art Company Mono Italic', Georgia, 'Times New Roman', serif;
+  /* Postcard caption — Ioskeley Mono on web, falls back to system mono. */
+  --font-caption: 'Ioskeley Mono', var(--font-mono);
+}
+
+/* Replace the UA's default focus ring on postcard fields with a warm, subtle one. */
+textarea:focus-visible,
+input:focus-visible {
+  outline: 1.5px solid rgba(63, 46, 34, 0.35);
+  outline-offset: 2px;
+  border-radius: 3px;
 }
