@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -13,6 +14,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const cardWidth = screenWidth - Spacing.four * 2;
+  const router = useRouter();
 
   return (
     <View style={styles.root}>
@@ -21,7 +23,7 @@ export default function HomeScreen() {
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: insets.top + Spacing.three,
+            paddingTop: insets.top + Spacing.five,
             paddingBottom: insets.bottom + FAB_SIZE + Spacing.six,
           },
         ]}
@@ -35,9 +37,7 @@ export default function HomeScreen() {
 
       <CreateButton
         size={FAB_SIZE}
-        onPress={() => {
-          // TODO: open the create-postcard flow (Capture → Compose → …)
-        }}
+        onPress={() => router.push('/create')}
         style={{ right: FAB_MARGIN, bottom: insets.bottom + FAB_MARGIN }}
       />
     </View>
@@ -56,8 +56,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
   },
   title: {
-    fontFamily: Fonts.serif,
-    fontStyle: 'italic',
+    fontFamily: Fonts.serifItalic,
     fontSize: 30,
     lineHeight: 38,
     color: Brand.brown,

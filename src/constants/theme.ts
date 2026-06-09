@@ -30,24 +30,31 @@ export const Fonts = Platform.select({
   ios: {
     /** iOS `UIFontDescriptorSystemDesignDefault` */
     sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
+    /** Art Company Mono, loaded from the bundled OTF via useAppFonts(). */
+    serif: 'ArtCompanyMono',
+    serifItalic: 'ArtCompanyMono-Italic',
     /** iOS `UIFontDescriptorSystemDesignRounded` */
     rounded: 'ui-rounded',
     /** iOS `UIFontDescriptorSystemDesignMonospaced` */
     mono: 'ui-monospace',
+    /** Ioskeley Mono, loaded from the bundled TTF via useAppFonts(). */
+    caption: 'IoskeleyMono',
   },
   default: {
     sans: 'normal',
-    serif: 'serif',
+    serif: 'ArtCompanyMono',
+    serifItalic: 'ArtCompanyMono-Italic',
     rounded: 'normal',
     mono: 'monospace',
+    caption: 'IoskeleyMono',
   },
   web: {
     sans: 'var(--font-display)',
     serif: 'var(--font-serif)',
+    serifItalic: 'var(--font-serif-italic)',
     rounded: 'var(--font-rounded)',
     mono: 'var(--font-mono)',
+    caption: 'var(--font-caption)',
   },
 });
 
@@ -70,6 +77,9 @@ export const MaxContentWidth = 800;
  */
 export const Brand = {
   cream: '#FFF5E1', // Brand/Cream — screen background
+  cream60: 'rgba(255, 245, 225, 0.6)', // cream at 60% — controls on a dark overlay
+  cream20: 'rgba(255, 245, 225, 0.2)', // cream at 20% — borders/tracks on dark
+  cream12: 'rgba(255, 245, 225, 0.12)', // cream at 12% — fills on dark
   brown: '#3F2E22', // Brand/Brown — title, captions, frames, create button
   brown60: 'rgba(63, 46, 34, 0.6)', // Brand/Brown 60%
   brown10: 'rgba(63, 46, 34, 0.1)', // Brand/Brown 10%

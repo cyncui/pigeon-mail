@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useId, useMemo } from 'react';
+import { useId, useMemo, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Circle, Defs, Image as SvgImage, Mask, Rect } from 'react-native-svg';
 
@@ -21,6 +21,8 @@ type Props = {
   width: number;
   /** Image aspect ratio (width / height). */
   aspectRatio?: number;
+  /** Custom photo layer (e.g. a Skia-treated canvas), sized to the inset photo rect. */
+  renderPhoto?: (size: { width: number; height: number }) => ReactNode;
 };
 
 /**
@@ -29,7 +31,7 @@ type Props = {
  * run through the corners — and the photo is inset under a matte veil plus a
  * faint pass of the same paper grain, so the whole card reads as one print.
  */
-export function StampFrame({ imageUri, width, aspectRatio = 3 / 2 }: Props) {
+export function StampFrame({ imageUri, width, aspectRatio = 3 / 2, renderPhoto }: Props) {
   const maskId = `stamp-${useId().replace(/:/g, '')}`;
 
   const imageW = width - STAMP_BORDER * 2;
@@ -85,7 +87,11 @@ export function StampFrame({ imageUri, width, aspectRatio = 3 / 2 }: Props) {
       </Svg>
 
       {/* the photo, inset to sit inside the paper border */}
-      <Image source={{ uri: imageUri }} style={[styles.image, photoRect]} contentFit="cover" transition={250} />
+      {renderPhoto ? (
+        <View style={[styles.image, photoRect]}>{renderPhoto({ width: imageW, height: imageH })}</View>
+      ) : (
+        <Image source={{ uri: imageUri }} style={[styles.image, photoRect]} contentFit="cover" transition={250} />
+      )}
       {/* warm matte veil so the photo reads as a print, not a glossy digital image */}
       <View pointerEvents="none" style={[styles.print, photoRect]} />
       {/* faint paper grain over the photo, multiplied so it reads as printed on the same sheet */}
