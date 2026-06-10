@@ -20,7 +20,7 @@ export function CreateButton({ onPress, size = 56, style }: Props) {
       onPress={onPress}
       style={({ pressed }) => [
         styles.fab,
-        { width: size, height: size, borderRadius: size / 2, transform: [{ scale: pressed ? 0.94 : 1 }] },
+        { width: size, height: size, borderRadius: size / 2, transform: [{ scale: pressed ? 0.96 : 1 }] },
         style,
       ]}
     >

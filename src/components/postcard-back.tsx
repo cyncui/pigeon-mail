@@ -1,43 +1,99 @@
 import { Image } from 'expo-image';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { useRef, type ReactNode, type RefObject } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import Animated, { interpolateColor, useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 
+import { AddressLines, AddressLinesDisplay } from '@/components/address-lines';
+import { ScriptInput } from '@/components/script-input';
 import { Brand, Fonts, Spacing } from '@/constants/theme';
+import { formatAddressLines, type Address } from '@/lib/address';
 
 const PAPER_TEXTURE = require('../../assets/textures/paper.jpg');
-const PLACEHOLDER = 'rgba(63, 46, 34, 0.35)';
+const PLACEHOLDER = 'rgba(63, 46, 34, 0.30)';
+
+export type WritingRegion = 'dateline' | 'message' | 'recipient' | 'sender';
+export type RegionRect = { x: number; y: number; width: number; height: number };
 
 type Props = {
   width: number;
   height: number;
+  /** "Kyoto, in June —" line above the message; feeds the feed caption. */
+  dateline?: string;
+  onChangeDateline?: (text: string) => void;
   message: string;
-  onChangeMessage: (text: string) => void;
-  recipient: string;
-  onChangeRecipient: (text: string) => void;
-  sender: string;
-  onChangeSender: (text: string) => void;
+  onChangeMessage?: (text: string) => void;
+  recipient: Address;
+  sender: Address;
+  onChangeRecipient?: (a: Address) => void;
+  onChangeSender?: (a: Address) => void;
+  /** Non-interactive render (send preview, picked-up desk card). */
+  readOnly?: boolean;
+  /** Lean-in: a writing region gained focus; rect is in window coordinates. */
+  onRegionFocus?: (region: WritingRegion, rect: RegionRect) => void;
+  onRegionBlur?: (region: WritingRegion) => void;
+  /** The dashed stamp box, measurable by the studio as the drop target. */
+  stampBoxRef?: RefObject<View | null>;
+  /** 0–1 — the dragged stamp is hovering over the box (highlights it). */
+  stampHover?: SharedValue<number>;
+  /** Once affixed, the stamp lives IN the box so it flies with the card. */
+  affixedStamp?: ReactNode;
+  /** Tapping the affixed stamp (retry after a failed send). */
+  onStampPress?: () => void;
+  /** Pencil note under the box — what's still missing before it can fly. */
+  boxHint?: string;
 };
 
 /**
- * The writing side of the postcard: message on the left, a stamp box and the
- * recipient address on the right, sender ("From") tucked under the message.
- * Same paper stock as the front so the flip reveals one coherent card.
- *
- * Everything except the text fields is `pointerEvents="box-none"` so taps on the
- * bare paper fall through to the flip layer beneath, while taps on a field still
- * focus it for editing.
+ * The writing side of the postcard. Everything is written ON the paper — a
+ * dateline and message on the left, the sender ("From") tucked beneath them,
+ * a stamp box and the recipient's ruled address lines on the right. No
+ * drawers, no forms; tapping a region just starts writing there, and the
+ * lean-in callbacks let the studio zoom the card toward your pen.
  */
 export function PostcardBack({
   width,
   height,
+  dateline = '',
+  onChangeDateline,
   message,
   onChangeMessage,
   recipient,
-  onChangeRecipient,
   sender,
+  onChangeRecipient,
   onChangeSender,
+  readOnly,
+  onRegionFocus,
+  onRegionBlur,
+  stampBoxRef,
+  stampHover,
+  affixedStamp,
+  onStampPress,
+  boxHint,
 }: Props) {
+  const regionRefs = {
+    dateline: useRef<View>(null),
+    message: useRef<View>(null),
+    recipient: useRef<View>(null),
+    sender: useRef<View>(null),
+  };
+
+  function focusRegion(region: WritingRegion) {
+    const node = regionRefs[region].current;
+    if (!node || !onRegionFocus) return;
+    node.measureInWindow((x, y, w, h) => onRegionFocus(region, { x, y, width: w, height: h }));
+  }
+
+  // The drop target answers the dragged stamp: a touch of growth + darker dashes.
+  const boxStyle = useAnimatedStyle(() => {
+    const hover = stampHover?.value ?? 0;
+    return {
+      transform: [{ scale: 1 + hover * 0.04 }],
+      borderColor: interpolateColor(hover, [0, 1], ['rgba(63, 46, 34, 0.1)', 'rgba(63, 46, 34, 0.6)']),
+    };
+  });
+
   return (
-    <View style={[styles.card, { width, height }]} pointerEvents="box-none">
+    <View style={[styles.card, { width, height }]} pointerEvents={readOnly ? 'none' : 'box-none'}>
       <Image
         source={PAPER_TEXTURE}
         style={[StyleSheet.absoluteFill, styles.texture]}
@@ -46,43 +102,101 @@ export function PostcardBack({
       />
       <View style={styles.inner} pointerEvents="box-none">
         <View style={styles.left} pointerEvents="box-none">
-          <TextInput
-            style={styles.message}
-            value={message}
-            onChangeText={onChangeMessage}
-            placeholder="Write your message…"
-            placeholderTextColor={PLACEHOLDER}
-            multiline
-            textAlignVertical="top"
-          />
-          <View style={styles.senderBlock} pointerEvents="box-none">
+          <View ref={regionRefs.dateline} collapsable={false}>
+            {readOnly ? (
+              dateline ? (
+                <Text style={styles.dateline}>{dateline}</Text>
+              ) : null
+            ) : (
+              <TextInput
+                style={[styles.dateline, styles.datelineInput]}
+                value={dateline}
+                onChangeText={onChangeDateline}
+                placeholder="where / when…"
+                placeholderTextColor={PLACEHOLDER}
+                maxLength={40}
+                returnKeyType="done"
+                onFocus={() => focusRegion('dateline')}
+                onBlur={() => onRegionBlur?.('dateline')}
+              />
+            )}
+          </View>
+
+          <View ref={regionRefs.message} collapsable={false} style={styles.messageWrap}>
+            {readOnly ? (
+              <Text style={styles.message}>{message}</Text>
+            ) : (
+              <ScriptInput
+                value={message}
+                onChangeText={(text) => onChangeMessage?.(text)}
+                fontSize={22}
+                lineHeight={30}
+                placeholder="Write your message…"
+                maxLength={220}
+                onFocus={() => focusRegion('message')}
+                onBlur={() => onRegionBlur?.('message')}
+              />
+            )}
+          </View>
+
+          <View ref={regionRefs.sender} collapsable={false} style={styles.senderBlock}>
             <Text style={styles.fromLabel} pointerEvents="none">
               From
             </Text>
-            <TextInput
-              style={styles.sender}
-              value={sender}
-              onChangeText={onChangeSender}
-              placeholder="Your address"
-              placeholderTextColor={PLACEHOLDER}
-              multiline
-            />
+            {readOnly ? (
+              <AddressLinesDisplay lines={formatAddressLines(sender)} fontSize={16} />
+            ) : (
+              <AddressLines
+                value={sender}
+                onChange={(a) => onChangeSender?.(a)}
+                fontSize={16}
+                namePlaceholder="Your name"
+                onFocusBlock={() => focusRegion('sender')}
+                onBlurBlock={() => onRegionBlur?.('sender')}
+              />
+            )}
           </View>
         </View>
 
         <View style={styles.right} pointerEvents="box-none">
-          <View style={styles.stamp} pointerEvents="none">
-            <View style={styles.stampInner} />
+          <Animated.View
+            ref={stampBoxRef as RefObject<View>}
+            collapsable={false}
+            style={[styles.stamp, boxStyle]}
+            pointerEvents={affixedStamp && onStampPress ? 'auto' : 'none'}
+          >
+            {affixedStamp ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Stamp"
+                onPress={onStampPress}
+                style={styles.affixed}
+              >
+                {affixedStamp}
+              </Pressable>
+            ) : (
+              <View style={styles.stampInner} />
+            )}
+          </Animated.View>
+          {boxHint ? (
+            <Text style={styles.boxHint} pointerEvents="none">
+              {boxHint}
+            </Text>
+          ) : null}
+          <View ref={regionRefs.recipient} collapsable={false}>
+            {readOnly ? (
+              <AddressLinesDisplay lines={formatAddressLines(recipient)} fontSize={20} />
+            ) : (
+              <AddressLines
+                value={recipient}
+                onChange={(a) => onChangeRecipient?.(a)}
+                fontSize={20}
+                namePlaceholder="Name"
+                onFocusBlock={() => focusRegion('recipient')}
+                onBlurBlock={() => onRegionBlur?.('recipient')}
+              />
+            )}
           </View>
-          <TextInput
-            style={styles.address}
-            value={recipient}
-            onChangeText={onChangeRecipient}
-            placeholder="Recipient name & address"
-            placeholderTextColor={PLACEHOLDER}
-            multiline
-            textAlignVertical="top"
-          />
         </View>
       </View>
     </View>
@@ -110,13 +224,27 @@ const styles = StyleSheet.create({
     paddingRight: Spacing.three,
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: Brand.brown10,
-    justifyContent: 'space-between',
   },
+  dateline: {
+    fontFamily: Fonts.script,
+    fontSize: 22,
+    lineHeight: 26,
+    color: Brand.brown60,
+  },
+  datelineInput: {
+    padding: 0,
+    marginBottom: 2,
+  },
+  messageWrap: {
+    flex: 1,
+  },
+  // The message body is the maker's own hand; the dateline/addresses keep the
+  // formal script.
   message: {
     flex: 1,
     fontFamily: Fonts.serif,
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 22,
+    lineHeight: 30,
     color: Brand.brown,
     padding: 0,
   },
@@ -130,13 +258,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: Brand.brown60,
     marginBottom: 2,
-  },
-  sender: {
-    fontFamily: Fonts.caption,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Brand.brown,
-    padding: 0,
   },
   right: {
     flex: 0.85,
@@ -161,12 +282,17 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Brand.brown10,
   },
-  address: {
-    flex: 1,
+  affixed: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  boxHint: {
     fontFamily: Fonts.caption,
-    fontSize: 13,
-    lineHeight: 19,
-    color: Brand.brown,
-    padding: 0,
+    fontSize: 8,
+    lineHeight: 11,
+    color: Brand.brown60,
+    textAlign: 'right',
+    marginBottom: Spacing.one,
+    transform: [{ rotate: '-1deg' }],
   },
 });

@@ -1,17 +1,10 @@
 import { Canvas, ColorMatrix, Fill, Image, Shader, Skia, useImage } from '@shopify/react-native-skia';
 
-import type { Treatment } from '@/lib/treatments';
+import { GRAIN_SKSL, type Treatment } from '@/lib/treatments';
 
-// Static luminance grain, blended 'overlay' so it adds tooth without shifting
-// exposure (0.5 = neutral under overlay). Compiled once; CanvasKit is guaranteed
-// loaded because this module is only imported after Skia is ready.
-const grainEffect = Skia.RuntimeEffect.Make(`
-uniform float intensity;
-half4 main(float2 xy) {
-  float n = fract(sin(dot(xy, float2(12.9898, 78.233))) * 43758.5453123);
-  float v = 0.5 + (n - 0.5) * intensity;
-  return half4(half3(v), 1.0);
-}`);
+// Compiled once; CanvasKit is guaranteed loaded because this module is only
+// imported after Skia is ready.
+const grainEffect = Skia.RuntimeEffect.Make(GRAIN_SKSL);
 
 export type TreatedPhotoProps = {
   uri: string;

@@ -40,6 +40,7 @@ export function GrainSlider({ value, onChange }: Props) {
       <Text style={styles.label}>Grain</Text>
       <View
         style={styles.track}
+        hitSlop={{ top: 8, bottom: 8 }}
         onLayout={(e) => {
           widthRef.current = e.nativeEvent.layout.width;
           setTrackW(e.nativeEvent.layout.width);
