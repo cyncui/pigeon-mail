@@ -13,8 +13,8 @@ import Animated, {
 import { ModalScrim } from '@/components/modal-scrim';
 import StudioScreen from '@/components/studio-screen';
 import { ModalContext } from '@/lib/modal-context';
+import { EASE_OUT } from '@/lib/motion';
 
-const EASE_OUT = Easing.bezier(0.16, 1, 0.3, 1);
 const EASE_IN = Easing.in(Easing.quad);
 
 /**

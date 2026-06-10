@@ -36,10 +36,9 @@
         }
       ],
       [
-        "expo-image-picker",
+        "expo-camera",
         {
-          "photosPermission": "Pigeon Mail uses your photos to put on the front of a postcard.",
-          "cameraPermission": "Pigeon Mail uses your camera to take a photo for the front of a postcard."
+          "cameraPermission": "Pigeon Mail uses your camera to take the photo for the front of your postcard."
         }
       ]
     ],

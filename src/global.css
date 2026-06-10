@@ -6,22 +6,31 @@
   font-display: swap;
 }
 
-/* Art Company Mono — the display "serif". Italic is its own family so it can be
-   referenced directly (matches the native setup, where fontStyle is unreliable
-   for custom fonts). Trial face is missing some punctuation, hence the fallback. */
+/* Hand of Cynthia — the display "serif" is the maker's own handwriting. One
+   style only, so the italic slot maps to the same face. Covers A–Z a–z 0–9
+   and basic punctuation; anything fancier falls back to Georgia. */
 @font-face {
-  font-family: 'Art Company Mono';
-  src: url('/fonts/ArtCompanyMono-Regular.woff2') format('woff2');
+  font-family: 'Hand of Cynthia';
+  src: url('/fonts/HandOfCynthia-Regular.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
+
+/* Lovers Quarrel — the handwriting script for everything "written" on a
+   postcard. A small-bodied formal calligraphy face: use it large. */
 @font-face {
-  font-family: 'Art Company Mono Italic';
-  src: url('/fonts/ArtCompanyMono-Italic.woff2') format('woff2');
+  font-family: 'Lovers Quarrel';
+  src: url('/fonts/LoversQuarrel-Regular.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
+}
+
+/* Crisper text on macOS displays. */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 :root {
@@ -31,10 +40,12 @@
   --font-mono:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
   --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
-  --font-serif: 'Art Company Mono', Georgia, 'Times New Roman', serif;
-  --font-serif-italic: 'Art Company Mono Italic', Georgia, 'Times New Roman', serif;
+  --font-serif: 'Hand of Cynthia', Georgia, 'Times New Roman', serif;
+  --font-serif-italic: 'Hand of Cynthia', Georgia, 'Times New Roman', serif;
   /* Postcard caption — Ioskeley Mono on web, falls back to system mono. */
   --font-caption: 'Ioskeley Mono', var(--font-mono);
+  /* Handwriting on the postcard — message, addresses, dateline. */
+  --font-script: 'Lovers Quarrel', 'Snell Roundhand', 'Segoe Script', cursive;
 }
 
 /* Replace the UA's default focus ring on postcard fields with a warm, subtle one. */
@@ -43,4 +54,13 @@ input:focus-visible {
   outline: 1.5px solid rgba(63, 46, 34, 0.35);
   outline-offset: 2px;
   border-radius: 3px;
+}
+
+/* Postcards (and the stamp) are physical objects moved by our gestures — never
+   let the browser start a native image drag with its floating ghost instead.
+   Firefox ignores -webkit-user-drag; the root layout's dragstart handler
+   covers it. */
+img {
+  -webkit-user-drag: none;
+  user-select: none;
 }

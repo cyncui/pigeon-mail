@@ -12,7 +12,10 @@ const PAPER_TEXTURE_OPACITY = 0.8;
 // Faint paper texture multiplied over the photo so the whole stamp reads as one sheet.
 const PHOTO_TEXTURE_OPACITY = 0.5;
 
-const STAMP_BORDER = 18; // paper margin framing the image
+/** Paper margin framing the image — the geometry other surfaces size against. */
+export const STAMP_BORDER = 18;
+/** A standard postcard's landscape ratio (width / height). */
+export const POSTCARD_ASPECT = 3 / 2;
 const PERF_PITCH = 18; // distance between perforation centers
 const PERF_RADIUS = 6; // perforation hole radius
 
@@ -23,6 +26,10 @@ type Props = {
   aspectRatio?: number;
   /** Custom photo layer (e.g. a Skia-treated canvas), sized to the inset photo rect. */
   renderPhoto?: (size: { width: number; height: number }) => ReactNode;
+  /** Frame geometry overrides — the postage-stamp miniature uses 6 / 9 / 3. */
+  border?: number;
+  perfPitch?: number;
+  perfRadius?: number;
 };
 
 /**
@@ -31,17 +38,25 @@ type Props = {
  * run through the corners — and the photo is inset under a matte veil plus a
  * faint pass of the same paper grain, so the whole card reads as one print.
  */
-export function StampFrame({ imageUri, width, aspectRatio = 3 / 2, renderPhoto }: Props) {
+export function StampFrame({
+  imageUri,
+  width,
+  aspectRatio = 3 / 2,
+  renderPhoto,
+  border = STAMP_BORDER,
+  perfPitch = PERF_PITCH,
+  perfRadius = PERF_RADIUS,
+}: Props) {
   const maskId = `stamp-${useId().replace(/:/g, '')}`;
 
-  const imageW = width - STAMP_BORDER * 2;
+  const imageW = width - border * 2;
   const imageH = imageW / aspectRatio;
-  const height = imageH + STAMP_BORDER * 2;
+  const height = imageH + border * 2;
 
   const holes = useMemo(() => {
     const pts: { cx: number; cy: number }[] = [];
-    const nx = Math.max(2, Math.round(width / PERF_PITCH));
-    const ny = Math.max(2, Math.round(height / PERF_PITCH));
+    const nx = Math.max(2, Math.round(width / perfPitch));
+    const ny = Math.max(2, Math.round(height / perfPitch));
     const stepX = width / nx;
     const stepY = height / ny;
     // top & bottom edges, including the four corners
@@ -57,11 +72,11 @@ export function StampFrame({ imageUri, width, aspectRatio = 3 / 2, renderPhoto }
       pts.push({ cx: width, cy });
     }
     return pts;
-  }, [width, height]);
+  }, [width, height, perfPitch]);
 
-  const perfHoles = holes.map((c, i) => <Circle key={i} cx={c.cx} cy={c.cy} r={PERF_RADIUS} fill="#000" />);
+  const perfHoles = holes.map((c, i) => <Circle key={i} cx={c.cx} cy={c.cy} r={perfRadius} fill="#000" />);
 
-  const photoRect = { top: STAMP_BORDER, left: STAMP_BORDER, width: imageW, height: imageH };
+  const photoRect = { top: border, left: border, width: imageW, height: imageH };
 
   return (
     <View style={{ width, height }}>
