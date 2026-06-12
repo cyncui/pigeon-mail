@@ -75,6 +75,18 @@ export function commitPlacement(id: string, placement: Placement): void {
   void persist();
 }
 
+/** Commit a whole desk's worth of placements in one write (shake-scatter). */
+export function commitPlacements(entries: Map<string, Placement>): void {
+  let nextZ = cache.nextZ;
+  const cards = { ...cache.cards };
+  entries.forEach((placement, id) => {
+    cards[id] = placement;
+    nextZ = Math.max(nextZ, placement.z + 1);
+  });
+  cache = { ...cache, nextZ, cards };
+  void persist();
+}
+
 export function getPlacement(id: string): Placement | undefined {
   return cache.cards[id];
 }
@@ -126,6 +138,44 @@ export function seedPlacement(id: string, stackIndex: number, rect: DeskRect): P
     rot: tiltFromSeed(id),
     z: stackIndex,
   };
+}
+
+/**
+ * A shake throws every card to its own patch of desk. Cards land in the cells
+ * of a shuffled, jittered grid — true uniform randomness clumps badly at desk
+ * counts — and pick up a rotation well past the resting tilt plus a reshuffled
+ * stacking order, so the spill reads as a toss, not a layout.
+ */
+export function scatterPlacements(ids: string[], rect: DeskRect): Map<string, Placement> {
+  const w = Math.max(1, rect.right - rect.left);
+  const h = Math.max(1, rect.bottom - rect.top);
+  const cols = Math.max(1, Math.round(Math.sqrt((ids.length * w) / h)));
+  const rows = Math.max(1, Math.ceil(ids.length / cols));
+
+  const cells = shuffle(Array.from({ length: cols * rows }, (_, i) => i));
+  const zs = shuffle(ids.map((_, i) => i + 1));
+
+  const out = new Map<string, Placement>();
+  ids.forEach((id, i) => {
+    const cell = cells[i];
+    const col = cell % cols;
+    const row = Math.floor(cell / cols);
+    out.set(id, {
+      cx: clampUnit((col + 0.5 + (Math.random() - 0.5) * 0.7) / cols),
+      cy: clampUnit((row + 0.5 + (Math.random() - 0.5) * 0.7) / rows),
+      rot: (Math.random() - 0.5) * 18,
+      z: zs[i],
+    });
+  });
+  return out;
+}
+
+function shuffle(values: number[]): number[] {
+  for (let i = values.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [values[i], values[j]] = [values[j], values[i]];
+  }
+  return values;
 }
 
 export function placementToPx(p: Placement, rect: DeskRect): { x: number; y: number } {

@@ -41,6 +41,8 @@ type Props = {
   onStampPress?: () => void;
   /** Pencil note under the box — what's still missing before it can fly. */
   boxHint?: string;
+  /** The cancellation mark (a <Postmark/>), inked over the stamp corner. */
+  postmark?: ReactNode;
 };
 
 /**
@@ -69,6 +71,7 @@ export function PostcardBack({
   affixedStamp,
   onStampPress,
   boxHint,
+  postmark,
 }: Props) {
   const regionRefs = {
     dateline: useRef<View>(null),
@@ -159,25 +162,37 @@ export function PostcardBack({
         </View>
 
         <View style={styles.right} pointerEvents="box-none">
-          <Animated.View
-            ref={stampBoxRef as RefObject<View>}
-            collapsable={false}
-            style={[styles.stamp, boxStyle]}
-            pointerEvents={affixedStamp && onStampPress ? 'auto' : 'none'}
-          >
-            {affixedStamp ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Stamp"
-                onPress={onStampPress}
-                style={styles.affixed}
-              >
-                {affixedStamp}
-              </Pressable>
-            ) : (
-              <View style={styles.stampInner} />
-            )}
-          </Animated.View>
+          <View style={styles.stampArea} pointerEvents="box-none">
+            <Animated.View
+              ref={stampBoxRef as RefObject<View>}
+              collapsable={false}
+              style={[styles.stamp, boxStyle]}
+              pointerEvents={affixedStamp && onStampPress ? 'auto' : 'none'}
+            >
+              {/* Only a tappable stamp (send retry) may be a button — a plain
+                  affixed stamp must not nest a button inside the card's own
+                  flip button on web. */}
+              {affixedStamp && onStampPress ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Stamp"
+                  onPress={onStampPress}
+                  style={styles.affixed}
+                >
+                  {affixedStamp}
+                </Pressable>
+              ) : affixedStamp ? (
+                <View style={styles.affixed}>{affixedStamp}</View>
+              ) : (
+                <View style={styles.stampInner} />
+              )}
+            </Animated.View>
+            {postmark ? (
+              <View style={styles.postmarkPin} pointerEvents="none">
+                {postmark}
+              </View>
+            ) : null}
+          </View>
           {boxHint ? (
             <Text style={styles.boxHint} pointerEvents="none">
               {boxHint}
@@ -263,8 +278,11 @@ const styles = StyleSheet.create({
     flex: 0.85,
     paddingLeft: Spacing.three,
   },
-  stamp: {
+  stampArea: {
     alignSelf: 'flex-end',
+    marginBottom: Spacing.two,
+  },
+  stamp: {
     width: 40,
     height: 48,
     borderRadius: 2,
@@ -273,7 +291,14 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Spacing.two,
+  },
+  // The cancellation ring sits on the paper to the stamp's left; its killer
+  // bars cross the stamp and may run off the card edge — real mail does.
+  postmarkPin: {
+    position: 'absolute',
+    left: -37,
+    top: -1,
+    transform: [{ rotate: '-7deg' }],
   },
   stampInner: {
     width: 26,

@@ -4,6 +4,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withSequence,
   withSpring,
@@ -111,6 +112,27 @@ export function StampTray({
   const grab = useSharedValue(0);
   const rotation = useSharedValue(REST_ROTATION);
   const wiggle = useSharedValue(0);
+
+  // An armed, ignored stamp leans over every so often — "drag me" without a
+  // tooltip. Never while held, never once affixed.
+  const reduceMotion = useReducedMotion();
+  useEffect(() => {
+    if (!armed || hidden || affixed || reduceMotion) return;
+    const nudge = () => {
+      if (grab.value > 0.01) return;
+      wiggle.value = withSequence(
+        withTiming(-2.2, { duration: 90 }),
+        withTiming(1.6, { duration: 120 }),
+        withTiming(0, { duration: 180 }),
+      );
+    };
+    const first = setTimeout(nudge, 5000);
+    const repeat = setInterval(nudge, 9000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(repeat);
+    };
+  }, [armed, hidden, affixed, reduceMotion, grab, wiggle]);
 
   function tugDenied() {
     if (hintTimer.current) clearTimeout(hintTimer.current);

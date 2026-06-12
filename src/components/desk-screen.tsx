@@ -2,6 +2,9 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions } from 'react-native';
 import Animated, {
+  FadeIn,
+  FadeOut,
+  ReduceMotion,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -10,13 +13,15 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CreateButton } from '@/components/create-button';
-import { DeskCard, type DeskTarget } from '@/components/desk-card';
+import { DeskCard, type DeskTarget, type SettleMode } from '@/components/desk-card';
 import { PostcardFocus, type FocusOrigin } from '@/components/postcard-focus';
 import { POSTCARD_ASPECT, STAMP_BORDER } from '@/components/stamp-frame';
 import { Brand, Fonts, Spacing } from '@/constants/theme';
+import { useShake } from '@/hooks/use-shake';
 import {
   claimNextZ,
   commitPlacement,
+  commitPlacements,
   getPlacement,
   loadDeskLayout,
   peekNextZ,
@@ -24,10 +29,14 @@ import {
   pruneTo,
   pxToPlacement,
   resetDeskLayout,
+  scatterPlacements,
   seedPlacement,
   type DeskRect,
 } from '@/lib/desk-layout';
+import { loadHandling, pruneHandlingTo, recordPickup, useHandlingVersion, wearLevel } from '@/lib/handling';
+import { hapticLight, hapticMedium } from '@/lib/haptics';
 import type { PostcardData } from '@/lib/postcards';
+import { unitFromSeed } from '@/lib/tilt';
 
 const FAB_SIZE = 56;
 
@@ -41,9 +50,10 @@ type Props = {
 };
 
 /**
- * The desk: every postcard lives somewhere on it. Drag to spread them around
- * (positions persist), toss them with a flick, tap one to pick it up and read
- * it, and "tidy up" to spring them back into a neat center pile.
+ * The desk: every postcard lives somewhere on it. The mail arrives as a neat
+ * center pile — shake the phone to scatter it across the desk. Drag to
+ * rearrange (positions persist), toss with a flick, tap one to pick it up and
+ * read it, and "tidy up" to spring everything back into the pile.
  */
 /**
  * Every card carries gestures, an SVG perforation mask, and textures — a desk
@@ -73,9 +83,12 @@ export function DeskScreen({ cards: allCards, loading, onCreate }: Props) {
 
   const [mountIds, setMountIds] = useState<Set<string> | null>(null);
   const [settleEpoch, setSettleEpoch] = useState(0);
+  const [settleMode, setSettleMode] = useState<SettleMode>('glide');
   const [targets, setTargets] = useState<Map<string, CardTarget>>(new Map());
   const [focused, setFocused] = useState<{ postcard: PostcardData; origin: FocusOrigin } | null>(null);
   const [routeFocused, setRouteFocused] = useState(false);
+  // True while the mail still sits in its untouched pile — drives the shake hint.
+  const [piled, setPiled] = useState(false);
 
   const zCounter = useSharedValue(1);
   const arrivals = useRef(new Map<string, number>());
@@ -88,15 +101,17 @@ export function DeskScreen({ cards: allCards, loading, onCreate }: Props) {
     rectRef.current = deskRect;
   }, [deskRect]);
 
-  // Load the saved layout once the card list is real, and snapshot which ids
-  // were present at first render — anything appearing later is an "arrival".
+  // Load the saved layout (and each card's handling record) once the card
+  // list is real, and snapshot which ids were present at first render —
+  // anything appearing later is an "arrival".
   useEffect(() => {
     if (loading || mountIds !== null) return;
     let cancelled = false;
-    void loadDeskLayout().then(() => {
+    void Promise.all([loadDeskLayout(), loadHandling()]).then(() => {
       if (cancelled) return;
       const ids = cardsRef.current.map((c) => c.id);
       pruneTo(ids);
+      pruneHandlingTo(ids);
       zCounter.value = Math.max(peekNextZ(), ids.length + 1);
       setMountIds(new Set(ids));
     });
@@ -112,17 +127,21 @@ export function DeskScreen({ cards: allCards, loading, onCreate }: Props) {
     }, []),
   );
 
-  // (Re)derive every card's resting target. Runs on load, card arrival,
-  // tidy-up, and window resize — placement claims/commits are side effects,
-  // so this lives in an effect, not render.
+  // (Re)derive every card's resting target. Runs on load and card arrival —
+  // placement claims/commits are side effects, so this lives in an effect,
+  // not render. (Tidy/shake/resize go through settleTo instead, which updates
+  // targets and the epoch in the same commit so cards never spring to a
+  // stale target.)
   const ids = cards.map((c) => c.id).join(' ');
   useEffect(() => {
     if (mountIds === null) return;
     const list = cardsRef.current;
     const next = new Map<string, CardTarget>();
+    let anyStored = false;
     list.forEach((card, i) => {
       const entering = !mountIds.has(card.id);
       let placement = getPlacement(card.id);
+      if (placement) anyStored = true;
       if (!placement) {
         placement = seedPlacement(card.id, list.length - 1 - i, rectRef.current);
         if (entering) {
@@ -144,7 +163,58 @@ export function DeskScreen({ cards: allCards, loading, onCreate }: Props) {
       });
     });
     setTargets(next);
-  }, [mountIds, ids, settleEpoch]);
+    setPiled(!anyStored);
+  }, [mountIds, ids]);
+
+  // Re-aim every card and play one settle animation. Targets and the epoch
+  // bump land in the same commit, so each card's settle effect reads the
+  // fresh target the moment it fires.
+  const settleTo = useCallback((mode: SettleMode) => {
+    setTargets((prev) => {
+      const list = cardsRef.current;
+      const next = new Map<string, CardTarget>();
+      list.forEach((card, i) => {
+        const placement =
+          getPlacement(card.id) ?? seedPlacement(card.id, list.length - 1 - i, rectRef.current);
+        const { x, y } = placementToPx(placement, rectRef.current);
+        const before = prev.get(card.id);
+        next.set(card.id, {
+          x,
+          y,
+          rot: placement.rot,
+          z: placement.z,
+          // A card mid-arrival keeps its pending entrance.
+          entering: before?.entering ?? false,
+          arrival: before?.arrival ?? arrivals.current.get(card.id) ?? 0,
+        });
+      });
+      return next;
+    });
+    setSettleMode(mode);
+    setSettleEpoch((e) => e + 1);
+  }, []);
+
+  // The shake: throw the pile across the desk.
+  const scatter = useCallback(() => {
+    const list = cardsRef.current;
+    if (list.length === 0) return;
+    commitPlacements(scatterPlacements(list.map((c) => c.id), rectRef.current));
+    zCounter.value = Math.max(zCounter.value, peekNextZ());
+    hapticMedium();
+    setPiled(false);
+    settleTo('toss');
+  }, [settleTo, zCounter]);
+
+  const shakeReady = useShake(routeFocused && !focused && mountIds !== null, scatter);
+
+  // Shake while holding a card = let go: it puts itself back down. Same
+  // gesture, same meaning, opposite end of the pickup.
+  const [closeSignal, setCloseSignal] = useState(0);
+  const putDown = useCallback(() => {
+    hapticLight();
+    setCloseSignal((n) => n + 1);
+  }, []);
+  useShake(routeFocused && focused !== null, putDown);
 
   // Window resized (web): re-derive px targets and let cards glide over.
   const firstRect = useRef(true);
@@ -153,25 +223,34 @@ export function DeskScreen({ cards: allCards, loading, onCreate }: Props) {
       firstRect.current = false;
       return;
     }
-    setSettleEpoch((e) => e + 1);
-  }, [deskRect]);
+    settleTo('glide');
+  }, [deskRect, settleTo]);
 
   const handleCommit = useCallback((id: string, x: number, y: number, rot: number, z: number) => {
     const { cx, cy } = pxToPlacement(x, y, rectRef.current);
     commitPlacement(id, { cx, cy, rot, z });
+    setPiled(false);
   }, []);
 
   const handleTap = useCallback(
     (id: string, x: number, y: number, rot: number) => {
       const postcard = cardsRef.current.find((c) => c.id === id);
-      if (postcard) setFocused({ postcard, origin: { x, y, rot, width: cardW } });
+      if (postcard) {
+        // Picking a card up leaves a mark on it — that's the point.
+        recordPickup(id);
+        setFocused({ postcard, origin: { x, y, rot, width: cardW } });
+      }
     },
     [cardW],
   );
 
+  // Subscribe to handling so wearLevel() reads fresh after every pickup.
+  useHandlingVersion();
+
   async function tidyUp() {
     await resetDeskLayout();
-    setSettleEpoch((e) => e + 1);
+    setPiled(true);
+    settleTo('glide');
   }
 
   // Furniture fades away while a card is held.
@@ -201,7 +280,14 @@ export function DeskScreen({ cards: allCards, loading, onCreate }: Props) {
             height={cardH}
             target={target}
             settleEpoch={settleEpoch}
-            settleDelay={Math.min(target.z * 25, 250)}
+            settleMode={settleMode}
+            settleDelay={
+              // A shake is one impulse: a short ragged burst (re-rolled per
+              // shake), not the tidy-up's orderly bottom-of-pile-first cascade.
+              settleMode === 'toss'
+                ? Math.round(unitFromSeed(card.id, `burst${settleEpoch}`) * 110)
+                : Math.min(target.z * 25, 250)
+            }
             bounds={{
               minX: deskRect.left,
               maxX: deskRect.right,
@@ -212,6 +298,7 @@ export function DeskScreen({ cards: allCards, loading, onCreate }: Props) {
             entering={target.entering}
             playEntrance={routeFocused}
             entranceDelay={120 + target.arrival * 80}
+            wear={wearLevel(card.id)}
             held={focused?.postcard.id === card.id}
             reduceMotion={reduceMotion}
             onCommit={handleCommit}
@@ -221,6 +308,22 @@ export function DeskScreen({ cards: allCards, loading, onCreate }: Props) {
       })}
 
       <Animated.View style={[styles.furnitureLayer, furnitureStyle]} pointerEvents={focused ? 'none' : 'box-none'}>
+        {shakeReady && piled && cards.length > 1 ? (
+          <Animated.View
+            entering={FadeIn.duration(400).delay(900).reduceMotion(ReduceMotion.System)}
+            exiting={FadeOut.duration(180).reduceMotion(ReduceMotion.System)}
+            style={[
+              styles.shakeHint,
+              {
+                // A pencil note just under the pile.
+                top: deskRect.top + (deskRect.bottom - deskRect.top) / 2 - 12 + cardH / 2 + 14,
+              },
+            ]}
+            pointerEvents="none"
+          >
+            <Text style={styles.shakeHintText}>shake to scatter the mail</Text>
+          </Animated.View>
+        ) : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Tidy the desk"
@@ -244,6 +347,7 @@ export function DeskScreen({ cards: allCards, loading, onCreate }: Props) {
         <PostcardFocus
           postcard={focused.postcard}
           origin={focused.origin}
+          closeSignal={closeSignal}
           onClose={() => setFocused(null)}
         />
       ) : null}
@@ -285,6 +389,20 @@ const styles = StyleSheet.create({
   tidy: {
     position: 'absolute',
     left: Spacing.four,
+  },
+  shakeHint: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  shakeHintText: {
+    fontFamily: Fonts.caption,
+    fontSize: 11,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    color: Brand.brown60,
+    transform: [{ rotate: '-1deg' }],
   },
   tidyText: {
     fontFamily: Fonts.caption,

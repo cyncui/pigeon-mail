@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'rea
 
 import { GlassSurface } from '@/components/glass-surface';
 import { Brand } from '@/constants/theme';
+import { hapticLight } from '@/lib/haptics';
 
 type Props = {
   onPress?: () => void;
@@ -17,7 +18,10 @@ export function CreateButton({ onPress, size = 56, style }: Props) {
       accessibilityRole="button"
       accessibilityLabel="Create a postcard"
       hitSlop={10}
-      onPress={onPress}
+      onPress={() => {
+        hapticLight();
+        onPress?.();
+      }}
       style={({ pressed }) => [
         styles.fab,
         { width: size, height: size, borderRadius: size / 2, transform: [{ scale: pressed ? 0.96 : 1 }] },
