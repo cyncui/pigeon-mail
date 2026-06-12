@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GrainSlider } from '@/components/grain-slider';
 import { IslandCamera, type CapturedPhoto, type FromRect, type IslandCameraHandle } from '@/components/island-camera';
 import { PostcardBack, type RegionRect, type WritingRegion } from '@/components/postcard-back';
+import { Postmark, postmarkForToday } from '@/components/postmark';
 import { PrintFlight, type Rect } from '@/components/print-flight';
 import { STAMP_BORDER, StampFrame } from '@/components/stamp-frame';
 import { StampTray, TRAY_STAMP_WIDTH, type DropRect } from '@/components/stamp-tray';
@@ -25,7 +26,7 @@ import { TreatedPhoto } from '@/components/treated-photo';
 import { Brand, Fonts, Spacing } from '@/constants/theme';
 import { useLeanIn } from '@/hooks/use-lean-in';
 import { EMPTY_ADDRESS, isAddressComplete } from '@/lib/address';
-import { hapticError, hapticHeavy, hapticMedium } from '@/lib/haptics';
+import { hapticError, hapticHeavy, hapticMedium, hapticSoft } from '@/lib/haptics';
 import { useModal } from '@/lib/modal-context';
 import { EASE_OUT } from '@/lib/motion';
 import { persistImage } from '@/lib/persist-image';
@@ -164,10 +165,14 @@ export default function StudioScreen() {
       });
     }, delay);
   }
+  // The cancellation lands a beat after the stamp: thunk … clack.
+  const postmarkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(
     () => () => {
       if (measureTimer.current) clearTimeout(measureTimer.current);
       if (releaseTimer.current) clearTimeout(releaseTimer.current);
+      if (postmarkTimer.current) clearTimeout(postmarkTimer.current);
     },
     [],
   );
@@ -298,6 +303,7 @@ export default function StudioScreen() {
     setSendPhase('affixed');
     hapticHeavy();
     squash.value = withSequence(withTiming(0.99, { duration: 120 }), withTiming(1, { duration: 180 }));
+    postmarkTimer.current = setTimeout(hapticMedium, 320);
     void runSend();
     startSendFlight();
   }
@@ -428,6 +434,16 @@ export default function StudioScreen() {
                       }
                       onStampPress={sendPhase === 'error' ? retrySend : undefined}
                       boxHint={image && missing.length ? `needs ${missing.join(' · ')}` : undefined}
+                      postmark={
+                        sendPhase !== 'idle' ? (
+                          <Postmark
+                            mark={postmarkForToday(caption)}
+                            animateIn
+                            pressDelay={200}
+                            reduceMotion={reduceMotion}
+                          />
+                        ) : undefined
+                      }
                     />
                   </Animated.View>
                 </Animated.View>
@@ -452,7 +468,10 @@ export default function StudioScreen() {
                       accessibilityRole="button"
                       accessibilityState={{ selected: active }}
                       hitSlop={{ top: 4, bottom: 4 }}
-                      onPress={() => setTreatmentKey(t.key)}
+                      onPress={() => {
+                        if (t.key !== treatmentKey) hapticSoft();
+                        setTreatmentKey(t.key);
+                      }}
                       style={({ pressed }) => [
                         styles.pill,
                         active && styles.pillActive,

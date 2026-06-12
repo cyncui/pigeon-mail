@@ -3,6 +3,7 @@ import { StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withDecay,
@@ -12,6 +13,8 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { StampFrame } from '@/components/stamp-frame';
+import { WearOverlay } from '@/components/wear-overlay';
+import { hapticSoft } from '@/lib/haptics';
 import type { PostcardData } from '@/lib/postcards';
 
 /** px-space bounds for a card's CENTER — keeps a grabbable sliver on screen. */
@@ -19,15 +22,19 @@ export type DeskBounds = { minX: number; maxX: number; minY: number; maxY: numbe
 
 export type DeskTarget = { x: number; y: number; rot: number; z: number };
 
+/** How a settle should feel: a tidy glide back, or a shaken-loose toss. */
+export type SettleMode = 'glide' | 'toss';
+
 type Props = {
   postcard: PostcardData;
   width: number;
   height: number;
   target: DeskTarget;
-  /** Bumped when the parent wants cards to animate to `target` (tidy/resize). */
+  /** Bumped when the parent wants cards to animate to `target` (tidy/shake/resize). */
   settleEpoch: number;
   /** Per-card delay for staggered settles, ms. */
   settleDelay: number;
+  settleMode: SettleMode;
   bounds: DeskBounds;
   /** Desk-wide bring-to-front counter (shared across cards). */
   zCounter: { value: number };
@@ -38,6 +45,8 @@ type Props = {
   entranceDelay: number;
   /** Hidden while the focus overlay is "holding" this card. */
   held: boolean;
+  /** 0..1 — how visibly handled this card is (wearLevel). */
+  wear: number;
   reduceMotion: boolean;
   onCommit: (id: string, x: number, y: number, rot: number, z: number) => void;
   onTap: (id: string, x: number, y: number, rot: number) => void;
@@ -46,6 +55,10 @@ type Props = {
 const LIFT_SHADOW_IN = 160;
 const SETTLE_SPRING = { damping: 14, stiffness: 240 };
 const TOSS_MIN_SPEED = 250;
+// Tidy glides home; a shake flings — underdamped so cards overshoot and rock
+// into place like they actually slid across the desk.
+const GLIDE_SPRING = { damping: 18, stiffness: 160 };
+const SCATTER_SPRING = { damping: 12, stiffness: 190 };
 
 function DeskCardInner({
   postcard,
@@ -54,12 +67,14 @@ function DeskCardInner({
   target,
   settleEpoch,
   settleDelay,
+  settleMode,
   bounds,
   zCounter,
   entering,
   playEntrance,
   entranceDelay,
   held,
+  wear,
   reduceMotion,
   onCommit,
   onTap,
@@ -94,7 +109,40 @@ function DeskCardInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entering, playEntrance, entranceDelay, reduceMotion, target.rot]);
 
-  // Tidy / resize: glide to the (re)computed target.
+  // The thunk of new mail: the arriving card's first touch of the desk (the
+  // drop spring crossing rest, not its settle) gets a soft tick.
+  const landed = useSharedValue(entering ? 0 : 1);
+  useAnimatedReaction(
+    () => dropY.value,
+    (cur, prev) => {
+      if (landed.value || prev === null || prev === cur) return;
+      if (prev < -2 && cur >= -2) {
+        landed.value = 1;
+        runOnJS(hapticSoft)();
+      }
+    },
+  );
+
+  // The desk has a wooden lip: a card hitting the edge — dragged into it or
+  // tossed against it — ticks once per contact.
+  const { minX: bMinX, maxX: bMaxX, minY: bMinY, maxY: bMaxY } = bounds;
+  useAnimatedReaction(
+    () => ({ x: x.value, y: y.value }),
+    (cur, prev) => {
+      if (prev === null) return;
+      const hitX =
+        (cur.x <= bMinX && prev.x > bMinX) || (cur.x >= bMaxX && prev.x < bMaxX);
+      const hitY =
+        (cur.y <= bMinY && prev.y > bMinY) || (cur.y >= bMaxY && prev.y < bMaxY);
+      if (hitX || hitY) runOnJS(hapticSoft)();
+    },
+    [bMinX, bMaxX, bMinY, bMaxY],
+  );
+
+  // Tidy / shake / resize: animate to the (re)computed target. The epoch and
+  // the new target land in the same commit (the desk sets both states
+  // together); the ref guard keeps later target-only rebuilds (arrivals) from
+  // replaying the settle.
   const lastEpoch = useRef(settleEpoch);
   useEffect(() => {
     if (settleEpoch === lastEpoch.current) return;
@@ -106,13 +154,13 @@ function DeskCardInner({
       z.value = target.z;
       return;
     }
-    const spring = { damping: 18, stiffness: 160 };
+    const spring = settleMode === 'toss' ? SCATTER_SPRING : GLIDE_SPRING;
     x.value = withDelay(settleDelay, withSpring(target.x, spring));
     y.value = withDelay(settleDelay, withSpring(target.y, spring));
     rot.value = withDelay(settleDelay, withSpring(target.rot, spring));
     z.value = target.z;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settleEpoch]);
+  }, [settleEpoch, target, settleDelay, settleMode, reduceMotion]);
 
   // The gesture worklets are memoized, so they must call stable wrappers that
   // read the freshest handlers through a ref.
@@ -211,6 +259,7 @@ function DeskCardInner({
         <Animated.View style={[styles.shadow, styles.shadowRest, restShadowStyle]} />
         <Animated.View style={[styles.shadow, styles.shadowLift, liftShadowStyle]} />
         <StampFrame imageUri={postcard.imageUri} width={width} />
+        <WearOverlay seed={postcard.id} width={width} height={height} level={wear} />
       </Animated.View>
     </GestureDetector>
   );

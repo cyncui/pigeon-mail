@@ -28,7 +28,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#FFF5E1",
           "android": {
             "image": "./assets/images/splash-icon.png",
             "imageWidth": 76
@@ -40,7 +40,14 @@
         {
           "cameraPermission": "Pigeon Mail uses your camera to take the photo for the front of your postcard."
         }
-      ]
+      ],
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Pigeon Mail notices when you shake your phone so it can scatter the postcards on your desk."
+        }
+      ],
+      "expo-image"
     ],
     "experiments": {
       "typedRoutes": true,

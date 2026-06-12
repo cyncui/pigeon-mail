@@ -2,9 +2,12 @@ import { useRef, useState } from 'react';
 import { PanResponder, StyleSheet, Text, View } from 'react-native';
 
 import { Brand, Fonts, Spacing } from '@/constants/theme';
+import { hapticSoft } from '@/lib/haptics';
 
 const THUMB = 16;
 const TRACK_H = 24;
+// Film-advance ratchet: a soft tick at each tenth as the grain winds on.
+const DETENTS = 10;
 
 type Props = {
   /** 0–1 */
@@ -16,11 +19,18 @@ type Props = {
 export function GrainSlider({ value, onChange }: Props) {
   const [trackW, setTrackW] = useState(0);
   const widthRef = useRef(0);
+  const detentRef = useRef(Math.round(value * DETENTS));
 
   const setFromX = (x: number) => {
     const usable = Math.max(0, widthRef.current - THUMB);
     const clamped = Math.max(0, Math.min(usable, x - THUMB / 2));
-    onChange(usable > 0 ? clamped / usable : 0);
+    const next = usable > 0 ? clamped / usable : 0;
+    const detent = Math.round(next * DETENTS);
+    if (detent !== detentRef.current) {
+      detentRef.current = detent;
+      hapticSoft();
+    }
+    onChange(next);
   };
 
   const responder = useRef(
